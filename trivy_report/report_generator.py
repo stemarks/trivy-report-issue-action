@@ -1,6 +1,6 @@
 import collections
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, OrderedDict, TypedDict
+from typing import Iterator, List, Optional, OrderedDict, Tuple, TypedDict
 
 # Types for dictionaries found in JSON data
 
@@ -9,7 +9,7 @@ class VulnerabilityDict(TypedDict):
     VulnerabilityID: str
     PkgName: str
     InstalledVersion: str
-    FixedVersion: str
+    FixedVersion: Optional[str]
     Title: str
     Description: str
     Severity: str
@@ -74,14 +74,21 @@ class Issue:
     body: str
 
 
-def parse_results(data: ReportDict, existing_issues: List[str]) -> Iterator[Report]:
+def parse_results(
+    data: ReportDict, existing_issues: List[str]
+) -> Tuple[Iterator[Report], None]:
     """
-    Parses Trivy result structure and creates a report per package/version that was found.
+    Parses Trivy result structure and creates a report per package/version that
+    was found. Return None if no Results found, ie. nothing to parse.
 
     :param data: The report data that was parsed from JSON file.
     :param existing_issues: List of GitHub issues, used to exclude already reported issues.
     """
-    results = data["Results"]
+    try:
+        results = data["Results"]
+    except KeyError as e:
+        return None
+
     if not isinstance(results, list):
         raise TypeError(
             f"The JSON entry .Results is not a list, got: {type(results).__name__}"
@@ -105,7 +112,7 @@ def parse_results(data: ReportDict, existing_issues: List[str]) -> Iterator[Repo
         for vulnerability in vulnerabilities:
             package_name = vulnerability["PkgName"]
             package_version = vulnerability["InstalledVersion"]
-            package_fixed_version = vulnerability["FixedVersion"]
+            package_fixed_version = vulnerability.get("FixedVersion", "")
             package = f"{package_name}-{package_version}"
             report_id = f"{package}"
             has_issue = False
@@ -164,15 +171,15 @@ def generate_issues(reports: Iterator[Report]) -> Iterator[Issue]:
                 (f"- {reference}" for reference in vulnerability["References"])
             )
             issue_body += f"""\
-## `{vulnerability['VulnerabilityID']}` - {vulnerability['Title']}
+## `{vulnerability["VulnerabilityID"]}` - {vulnerability["Title"]}
 
-{vulnerability['Description']}
+{vulnerability["Description"]}
 
 ### Severity
-**{vulnerability['Severity']}**
+**{vulnerability["Severity"]}**
 
 ### Primary URL
-{vulnerability['PrimaryURL']}
+{vulnerability["PrimaryURL"]}
 
 ### References
 {reference_items}

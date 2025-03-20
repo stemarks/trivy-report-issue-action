@@ -28,6 +28,15 @@ def test_parse_report(report_filename: str, report_count: int):
         assert isinstance(report, Report)
 
 
+def test_parse_report_no_results():
+    # Test that it is able to parse Trivy reports with no Results list
+    data: ReportDict = json.load(open("tests/scans/scan4.json", "rb"))
+    assert isinstance(data, dict)
+
+    parsed_result = parse_results(data, existing_issues=[])
+    assert parsed_result is None
+
+
 def test_parse_report1():
     data: ReportDict = json.load(open("tests/scans/scan1.json", "rb"))
     reports: Dict[str, Report] = {}
@@ -122,6 +131,29 @@ def test_parse_report3():
         == "https://avd.aquasec.com/nvd/cve-2022-22822"
     )
     assert report.vulnerabilities[0]["FixedVersion"] == "2.2.6-2+deb10u2"
+
+
+def test_parse_report5():
+    data: ReportDict = json.load(open("tests/scans/scan5.json", "rb"))
+    reports: Dict[str, Report] = {}
+    for report in parse_results(data, existing_issues=[]):
+        reports[report.package] = report
+
+    assert "urllib3-1.26.4" in reports
+    report = reports["urllib3-1.26.4"]
+    assert report.package_name == "urllib3"
+    assert report.package_version == "1.26.4"
+    assert report.package_fixed_version == ""
+    assert report.package_type == "poetry"
+    assert report.target == "poetry.lock"
+    assert len(report.vulnerabilities) == 1
+    assert report.vulnerabilities[0]["VulnerabilityID"] == "CVE-2021-33503"
+    assert (
+        report.vulnerabilities[0]["PrimaryURL"]
+        == "https://avd.aquasec.com/nvd/cve-2021-33503"
+    )
+    with pytest.raises(KeyError):
+        _ = report.vulnerabilities[0]["FixedVersion"]
 
 
 def test_parse_and_exclude_issues():
